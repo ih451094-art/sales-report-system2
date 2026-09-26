@@ -1,0 +1,1721 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>
+        نظام تقارير المبيعات والتوصيل
+    </title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+
+        /* =================================================
+           شريط المستخدم
+        ================================================= */
+
+        .user-bar {
+
+            width: 100%;
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            background: #111a2e;
+
+            color: white;
+
+            padding: 10px 20px;
+
+            margin-bottom: 15px;
+
+            border-radius: 8px;
+
+            direction: rtl;
+
+        }
+
+
+        .user-info {
+
+            font-size: 15px;
+
+        }
+
+
+        .user-info strong {
+
+            color: #f5c89e;
+
+        }
+
+
+        .logout-button {
+
+            background: #c0392b;
+
+            color: white;
+
+            text-decoration: none;
+
+            padding: 8px 15px;
+
+            border-radius: 6px;
+
+            font-weight: bold;
+
+            transition: 0.2s;
+
+        }
+
+
+        .logout-button:hover {
+
+            background: #a93226;
+
+        }
+
+
+        /* =================================================
+           توافق الهاتف
+        ================================================= */
+
+        @media (max-width: 700px) {
+
+            .user-bar {
+
+                flex-direction: column;
+
+                gap: 10px;
+
+                text-align: center;
+
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<!-- =====================================================
+     USER BAR
+===================================================== -->
+
+<div class="user-bar">
+
+    <div class="user-info">
+
+        👤 المستخدم:
+
+        <strong>
+            {{ current_user.username }}
+        </strong>
+
+    </div>
+
+
+    <a
+        href="{{ url_for('logout') }}"
+        class="logout-button">
+
+        🚪 تسجيل الخروج
+
+    </a>
+
+</div>
+
+
+
+<!-- =====================================================
+     HEADER
+===================================================== -->
+
+<header class="top-header">
+
+    <div class="brand">
+
+        <div class="brand-icon">
+
+            🍴
+
+        </div>
+
+        <div>
+
+            <h1>
+                نظام تقارير المبيعات والتوصيل
+            </h1>
+
+            <p>
+                تقرير المبيعات والطلبات اليومية
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="header-user">
+
+        <span>
+            تقرير يومي
+        </span>
+
+    </div>
+
+</header>
+
+
+
+<!-- =====================================================
+     MAIN
+===================================================== -->
+
+<main class="container">
+
+
+    <!-- =================================================
+         CONTROL PANEL
+    ================================================== -->
+
+    <section class="control-panel">
+
+
+        <div class="date-box">
+
+            <label for="reportDate">
+
+                تاريخ التقرير
+
+            </label>
+
+
+            <input
+                type="date"
+                id="reportDate">
+
+        </div>
+
+
+
+        <div class="buttons">
+
+
+            <button
+                type="button"
+                class="btn save"
+                onclick="saveReport()">
+
+                💾 حفظ التقرير
+
+            </button>
+
+
+            <button
+                type="button"
+                class="btn history"
+                onclick="openReportsHistory()">
+
+                📋 التقارير السابقة
+
+            </button>
+
+
+            <button
+                type="button"
+                class="btn excel"
+                onclick="exportExcel()">
+
+                📊 تصدير Excel
+
+            </button>
+
+
+        </div>
+
+
+    </section>
+
+
+
+    <!-- =================================================
+         REPORTS
+    ================================================== -->
+
+    <div id="reports-container"></div>
+
+
+
+    <!-- =================================================
+         نافذة التقارير السابقة
+    ================================================== -->
+
+    <div
+        id="historyModal"
+        class="history-modal">
+
+
+        <div class="history-box">
+
+
+            <div class="history-header">
+
+                <h2>
+
+                    📋 التقارير السابقة
+
+                </h2>
+
+
+                <button
+                    type="button"
+                    class="close-history"
+                    onclick="closeReportsHistory()">
+
+                    ×
+
+                </button>
+
+            </div>
+
+
+            <div
+                id="historyList"
+                class="history-list">
+
+                <div class="history-loading">
+
+                    جاري تحميل التقارير...
+
+                </div>
+
+            </div>
+
+
+        </div>
+
+    </div>
+
+
+
+
+</main>
+
+
+
+<!-- =====================================================
+     FOOTER
+===================================================== -->
+
+<footer>
+
+    نظام تقارير المبيعات والتوصيل
+
+</footer>
+
+
+
+<script>
+
+
+/* =====================================================
+   تحديد تاريخ اليوم تلقائيًا
+===================================================== */
+
+function getTodayDate() {
+
+    const today = new Date();
+
+    const year =
+        today.getFullYear();
+
+    const month =
+        String(
+            today.getMonth() + 1
+        ).padStart(2, "0");
+
+    const day =
+        String(
+            today.getDate()
+        ).padStart(2, "0");
+
+
+    return (
+        year +
+        "-" +
+        month +
+        "-" +
+        day
+    );
+
+}
+
+
+document
+    .getElementById("reportDate")
+    .value = getTodayDate();
+
+
+
+/* =====================================================
+   بيانات التقارير
+===================================================== */
+
+const reports = [
+
+    /* =================================================
+       1 - جريت ستيك
+    ================================================= */
+
+    {
+
+        name: "جريت ستيك",
+
+        type: "great-steak",
+
+        columns: [
+
+            "طلبات توصيل طلبات",
+
+            "سنونو",
+
+            "كيتا - توصيل كيتا",
+
+            "ديليفرو توصيل المطعم",
+
+            "الكول سنتر"
+
+        ],
+
+        branches: [
+
+            "حولي",
+
+            "مارينا مول",
+
+            "مشرف",
+
+            "صباح السالم",
+
+            "المنقف",
+
+            "سعد العبدالله",
+
+            "العارضية"
+
+        ],
+
+        data: [
+
+            [51, 245.650, 0, 0, 41, 205.864, 5, 20.250, 0, 0],
+
+            [20, 102.000, 0, 0, 7, 46.750, 0, 0, 5, 20.950],
+
+            [37, 170.100, 0, 0, 34, 166.000, 11, 66.800, 0, 0],
+
+            [48, 244.050, 3, 11.850, 27, 144.700, 10, 40.550, 0, 0],
+
+            [26, 148.650, 0, 0, 18, 107.500, 1, 3.600, 0, 0],
+
+            [40, 220.400, 4, 20.800, 53, 261.200, 2, 6.550, 0, 0],
+
+            [28, 146.950, 0, 0, 23, 112.408, 7, 37.700, 0, 0]
+
+        ]
+
+    },
+
+
+    /* =================================================
+       2 - ستيك اند فرايز
+    ================================================= */
+
+    {
+
+        name: "ستيك اند فرايز",
+
+        type: "steak-fries",
+
+        columns: [
+
+            "طلبات توصيل طلبات",
+
+            "جاهز توصيل جاهز",
+
+            "كيتا - توصيل كيتا",
+
+            "ديليفرو توصيل المطعم",
+
+            "الكول سنتر"
+
+        ],
+
+        branches: [
+
+            "حولي",
+
+            "صباح السالم",
+
+            "المنقف",
+
+            "سعد العبدالله",
+
+            "العارضية"
+
+        ],
+
+        data: [
+
+            [1, 17.804, 0, 0, 0, 0, 0, 0, 0, 0],
+
+            [1, 9.950, 0, 0, 9, 40.544, 0, 0, 0, 0],
+
+            [1, 5.500, 0, 0, 1, 5.100, 0, 0, 0, 0],
+
+            [2, 14.500, 1, 18.095, 3, 12.302, 0, 0, 0, 0],
+
+            [2, 17.200, 1, 15.020, 1, 3.788, 0, 0, 0, 0]
+
+        ]
+
+    },
+
+
+    /* =================================================
+       3 - برجر 8
+    ================================================= */
+
+    {
+
+        name: "برجر 8",
+
+        type: "burger-8",
+
+        columns: [
+
+            "طلبات توصيل طلبات",
+
+            "جاهز توصيل جاهز",
+
+            "كيتا - توصيل كيتا",
+
+            "ديليفرو توصيل المطعم",
+
+            "الكول سنتر"
+
+        ],
+
+        branches: [
+
+            "حولي",
+
+            "مارينا مول",
+
+            "مشرف",
+
+            "صباح السالم",
+
+            "المنقف",
+
+            "سعد العبدالله",
+
+            "العارضية"
+
+        ],
+
+        data: [
+
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+
+            [0, 0, 0, 0, 1, 2.438, 0, 0, 0, 0],
+
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+        ]
+
+    },
+
+
+    /* =================================================
+       4 - بيتزا روستيكا
+    ================================================= */
+
+    {
+
+        name: "بيتزا روستيكا",
+
+        type: "pizza-rustica",
+
+        columns: [
+
+            "طلبات توصيل المطعم",
+
+            "جاهز توصيل جاهز",
+
+            "كيتا - توصيل كيتا",
+
+            "ديليفرو توصيل المطعم",
+
+            "الكول سنتر"
+
+        ],
+
+        branches: [
+
+            "صباح السالم"
+
+        ],
+
+        data: [
+
+            [0, 0, 1, 2.050, 1, 19.178, 0, 0, 1, 10.650]
+
+        ]
+
+    }
+
+];
+
+
+
+/* =====================================================
+   إنشاء جدول التقرير
+===================================================== */
+
+function createReport(
+    report,
+    reportIndex
+) {
+
+
+    let html = `
+
+        <section class="report-card">
+
+            <div class="report-title">
+
+                <h2>
+
+                    ${report.name}
+
+                </h2>
+
+            </div>
+
+
+            <div class="table-scroll">
+
+                <table
+                    class="report-table"
+                    id="report-table-${reportIndex}">
+
+
+                    <thead>
+
+                        <tr>
+
+                            <th
+                                rowspan="2"
+                                class="branch-header">
+
+                                الفرع
+
+                            </th>
+
+    `;
+
+
+    /* ================================================
+       أسماء الشركات
+    ================================================= */
+
+    report.columns.forEach(
+        function(column) {
+
+            html += `
+
+                <th colspan="2">
+
+                    ${column}
+
+                </th>
+
+            `;
+
+        }
+    );
+
+
+    html += `
+
+                        </tr>
+
+
+                        <tr>
+
+    `;
+
+
+    /* ================================================
+       الطلبات / المبلغ
+    ================================================= */
+
+    report.columns.forEach(
+        function() {
+
+            html += `
+
+                <th>
+
+                    الطلبات
+
+                </th>
+
+
+                <th>
+
+                    المبلغ
+
+                </th>
+
+            `;
+
+        }
+    );
+
+
+    html += `
+
+                        </tr>
+
+                    </thead>
+
+
+                    <tbody>
+
+    `;
+
+
+    /* ================================================
+       الفروع
+    ================================================= */
+
+    report.branches.forEach(
+        function(
+            branch,
+            rowIndex
+        ) {
+
+
+            const row =
+                report.data[rowIndex];
+
+
+            html += `
+
+                <tr>
+
+                    <td class="branch-name">
+
+                        ${branch}
+
+                    </td>
+
+            `;
+
+
+            for (
+                let columnIndex = 0;
+                columnIndex < report.columns.length;
+                columnIndex++
+            ) {
+
+
+                const orders =
+                    row[
+                        columnIndex * 2
+                    ] ?? 0;
+
+
+                const amount =
+                    row[
+                        columnIndex * 2 + 1
+                    ] ?? 0;
+
+
+                html += `
+
+                    <td>
+
+                        <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            class="data-input orders-input"
+
+                            data-report="${reportIndex}"
+
+                            data-row="${rowIndex}"
+
+                            data-column="${columnIndex * 2}"
+
+                            value="${orders}">
+
+                    </td>
+
+
+                    <td>
+
+                        <input
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            class="data-input amount-input"
+
+                            data-report="${reportIndex}"
+
+                            data-row="${rowIndex}"
+
+                            data-column="${columnIndex * 2 + 1}"
+
+                            value="${amount}">
+
+                    </td>
+
+                `;
+
+            }
+
+
+            html += `
+
+                </tr>
+
+            `;
+
+        }
+    );
+
+
+    /* ================================================
+       الإجمالي
+    ================================================= */
+
+    html += `
+
+                    </tbody>
+
+
+                    <tfoot>
+
+                        <tr class="total-row">
+
+                            <td>
+
+                                الإجمالي
+
+                            </td>
+
+    `;
+
+
+    report.columns.forEach(
+        function(
+            column,
+            columnIndex
+        ) {
+
+
+            html += `
+
+                <td
+                    id="total-orders-${reportIndex}-${columnIndex}">
+
+                    0
+
+                </td>
+
+
+                <td
+                    id="total-amount-${reportIndex}-${columnIndex}">
+
+                    0.000
+
+                </td>
+
+            `;
+
+        }
+    );
+
+
+    html += `
+
+                        </tr>
+
+                    </tfoot>
+
+
+                </table>
+
+            </div>
+
+        </section>
+
+    `;
+
+
+    return html;
+
+}
+
+
+
+/* =====================================================
+   عرض جميع التقارير
+===================================================== */
+
+function renderReports() {
+
+
+    const container =
+        document.getElementById(
+            "reports-container"
+        );
+
+
+    container.innerHTML = "";
+
+
+    reports.forEach(
+        function(
+            report,
+            index
+        ) {
+
+
+            container.innerHTML +=
+                createReport(
+                    report,
+                    index
+                );
+
+        }
+    );
+
+
+    attachInputEvents();
+
+
+    calculateAllTotals();
+
+}
+
+
+
+/* =====================================================
+   ربط خانات الإدخال
+===================================================== */
+
+function attachInputEvents() {
+
+
+    document
+        .querySelectorAll(".data-input")
+        .forEach(
+            function(input) {
+
+
+                input.addEventListener(
+                    "input",
+                    function() {
+
+                        calculateAllTotals();
+
+                    }
+                );
+
+
+            }
+        );
+
+}
+
+
+
+/* =====================================================
+   حساب الإجماليات
+===================================================== */
+
+function calculateAllTotals() {
+
+
+    reports.forEach(
+        function(
+            report,
+            reportIndex
+        ) {
+
+
+            for (
+                let columnIndex = 0;
+                columnIndex < report.columns.length;
+                columnIndex++
+            ) {
+
+
+                let ordersTotal = 0;
+
+                let amountTotal = 0;
+
+
+                report.branches.forEach(
+                    function(
+                        branch,
+                        rowIndex
+                    ) {
+
+
+                        const ordersInput =
+                            document.querySelector(
+                                `[data-report="${reportIndex}"][data-row="${rowIndex}"][data-column="${columnIndex * 2}"]`
+                            );
+
+
+                        const amountInput =
+                            document.querySelector(
+                                `[data-report="${reportIndex}"][data-row="${rowIndex}"][data-column="${columnIndex * 2 + 1}"]`
+                            );
+
+
+                        if (ordersInput) {
+
+                            ordersTotal +=
+                                Number(
+                                    ordersInput.value
+                                ) || 0;
+
+                        }
+
+
+                        if (amountInput) {
+
+                            amountTotal +=
+                                Number(
+                                    amountInput.value
+                                ) || 0;
+
+                        }
+
+
+                    }
+                );
+
+
+                const ordersTotalElement =
+                    document.getElementById(
+                        `total-orders-${reportIndex}-${columnIndex}`
+                    );
+
+
+                const amountTotalElement =
+                    document.getElementById(
+                        `total-amount-${reportIndex}-${columnIndex}`
+                    );
+
+
+                if (ordersTotalElement) {
+
+                    ordersTotalElement.textContent =
+                        ordersTotal;
+
+                }
+
+
+                if (amountTotalElement) {
+
+                    amountTotalElement.textContent =
+                        amountTotal.toFixed(3);
+
+                }
+
+            }
+
+        }
+    );
+
+}
+
+
+
+/* =====================================================
+   تجهيز بيانات الحفظ
+===================================================== */
+
+function collectReportData() {
+
+
+    const savedData = [];
+
+
+    reports.forEach(
+        function(
+            report,
+            reportIndex
+        ) {
+
+
+            const reportRows = [];
+
+
+            report.branches.forEach(
+                function(
+                    branch,
+                    rowIndex
+                ) {
+
+
+                    const rowData = [];
+
+
+                    for (
+                        let columnIndex = 0;
+                        columnIndex < report.columns.length;
+                        columnIndex++
+                    ) {
+
+
+                        const ordersInput =
+                            document.querySelector(
+                                `[data-report="${reportIndex}"][data-row="${rowIndex}"][data-column="${columnIndex * 2}"]`
+                            );
+
+
+                        const amountInput =
+                            document.querySelector(
+                                `[data-report="${reportIndex}"][data-row="${rowIndex}"][data-column="${columnIndex * 2 + 1}"]`
+                            );
+
+
+                        rowData.push(
+                            Number(
+                                ordersInput?.value
+                            ) || 0
+                        );
+
+
+                        rowData.push(
+                            Number(
+                                amountInput?.value
+                            ) || 0
+                        );
+
+                    }
+
+
+                    reportRows.push(
+                        rowData
+                    );
+
+                }
+            );
+
+
+            savedData.push(
+                reportRows
+            );
+
+        }
+    );
+
+
+    return savedData;
+
+}
+
+
+
+/* =====================================================
+   حفظ التقرير
+===================================================== */
+
+async function saveReport() {
+
+
+    const date =
+        document.getElementById(
+            "reportDate"
+        ).value;
+
+
+    if (!date) {
+
+        alert(
+            "من فضلك اختر تاريخ التقرير"
+        );
+
+        return;
+
+    }
+
+
+    const savedData =
+        collectReportData();
+
+
+    try {
+
+
+        const response =
+            await fetch(
+                "/api/save",
+                {
+
+                    method: "POST",
+
+                    headers: {
+
+                        "Content-Type":
+                            "application/json"
+
+                    },
+
+                    body: JSON.stringify({
+
+                        date: date,
+
+                        data: savedData
+
+                    })
+
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (result.success) {
+
+
+            alert(
+
+                "✅ تم حفظ التقرير بنجاح\n\n" +
+
+                "التاريخ: " +
+
+                date
+
+            );
+
+
+        } else {
+
+
+            alert(
+
+                "❌ حدث خطأ أثناء الحفظ\n\n" +
+
+                result.message
+
+            );
+
+        }
+
+
+    } catch (error) {
+
+
+        console.error(error);
+
+
+        alert(
+            "❌ لم يتم الاتصال بالخادم"
+        );
+
+    }
+
+}
+
+
+
+/* =====================================================
+   تحميل تقرير من قاعدة البيانات
+===================================================== */
+
+async function loadReport(date) {
+
+
+    if (!date) {
+
+        return;
+
+    }
+
+
+    try {
+
+
+        const response =
+            await fetch(
+                "/api/load/" + date
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!result.success) {
+
+
+            resetReportInputs();
+
+
+            calculateAllTotals();
+
+
+            return;
+
+        }
+
+
+        const savedData =
+            result.data;
+
+
+        savedData.forEach(
+            function(
+                reportRows,
+                reportIndex
+            ) {
+
+
+                reportRows.forEach(
+                    function(
+                        rowData,
+                        rowIndex
+                    ) {
+
+
+                        rowData.forEach(
+                            function(
+                                value,
+                                columnIndex
+                            ) {
+
+
+                                const input =
+                                    document.querySelector(
+                                        `[data-report="${reportIndex}"][data-row="${rowIndex}"][data-column="${columnIndex}"]`
+                                    );
+
+
+                                if (input) {
+
+                                    input.value =
+                                        value;
+
+                                }
+
+
+                            }
+                        );
+
+
+                    }
+                );
+
+
+            }
+        );
+
+
+        calculateAllTotals();
+
+
+    } catch (error) {
+
+
+        console.error(
+            "خطأ أثناء تحميل التقرير:",
+            error
+        );
+
+
+        alert(
+            "حدث خطأ أثناء تحميل التقرير"
+        );
+
+    }
+
+}
+
+
+
+/* =====================================================
+   تصفير جميع الخانات
+===================================================== */
+
+function resetReportInputs() {
+
+
+    document
+        .querySelectorAll(
+            ".data-input"
+        )
+        .forEach(
+            function(input) {
+
+                input.value = 0;
+
+            }
+        );
+
+
+}
+
+
+
+/* =====================================================
+   تغيير التاريخ
+===================================================== */
+
+document
+    .getElementById("reportDate")
+    .addEventListener(
+        "change",
+        function() {
+
+            loadReport(
+                this.value
+            );
+
+        }
+    );
+
+
+
+/* =====================================================
+   تصدير Excel
+===================================================== */
+
+function exportExcel() {
+
+
+    const date =
+        document.getElementById(
+            "reportDate"
+        ).value;
+
+
+    if (!date) {
+
+        alert(
+            "من فضلك اختر تاريخ التقرير أولاً."
+        );
+
+        return;
+
+    }
+
+
+    window.location.href =
+        "/api/export-excel/" +
+        date;
+
+}
+
+
+
+/* =====================================================
+   فتح نافذة التقارير السابقة
+===================================================== */
+
+async function openReportsHistory() {
+
+
+    const modal =
+        document.getElementById(
+            "historyModal"
+        );
+
+
+    const list =
+        document.getElementById(
+            "historyList"
+        );
+
+
+    modal.classList.add("show");
+
+
+    list.innerHTML = `
+
+        <div class="history-loading">
+
+            جاري تحميل التقارير...
+
+        </div>
+
+    `;
+
+
+    try {
+
+
+        const response =
+            await fetch(
+                "/api/reports"
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!result.success) {
+
+
+            list.innerHTML = `
+
+                <div class="history-empty">
+
+                    حدث خطأ أثناء تحميل التقارير.
+
+                </div>
+
+            `;
+
+            return;
+
+        }
+
+
+        if (
+            result.reports.length === 0
+        ) {
+
+
+            list.innerHTML = `
+
+                <div class="history-empty">
+
+                    لا توجد تقارير محفوظة حتى الآن.
+
+                </div>
+
+            `;
+
+            return;
+
+        }
+
+
+        list.innerHTML = "";
+
+
+        result.reports.forEach(
+            function(date) {
+
+
+                const item =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                item.className =
+                    "history-item";
+
+
+                item.innerHTML = `
+
+                    <div class="history-date">
+
+                        📅 ${formatDateArabic(date)}
+
+                    </div>
+
+
+                    <button
+                        type="button"
+                        class="history-open-btn"
+                        onclick="openSavedReport('${date}')">
+
+                        فتح التقرير
+
+                    </button>
+
+                `;
+
+
+                list.appendChild(
+                    item
+                );
+
+
+            }
+        );
+
+
+    } catch (error) {
+
+
+        console.error(error);
+
+
+        list.innerHTML = `
+
+            <div class="history-empty">
+
+                تعذر الاتصال بالخادم.
+
+            </div>
+
+        `;
+
+    }
+
+}
+
+
+
+/* =====================================================
+   إغلاق نافذة التقارير
+===================================================== */
+
+function closeReportsHistory() {
+
+
+    const modal =
+        document.getElementById(
+            "historyModal"
+        );
+
+
+    modal.classList.remove(
+        "show"
+    );
+
+}
+
+
+
+/* =====================================================
+   فتح تقرير محفوظ
+===================================================== */
+
+async function openSavedReport(date) {
+
+
+    const dateInput =
+        document.getElementById(
+            "reportDate"
+        );
+
+
+    dateInput.value =
+        date;
+
+
+    await loadReport(
+        date
+    );
+
+
+    closeReportsHistory();
+
+
+    window.scrollTo({
+
+        top: 0,
+
+        behavior: "smooth"
+
+    });
+
+}
+
+
+
+/* =====================================================
+   تحويل التاريخ إلى شكل عربي
+===================================================== */
+
+function formatDateArabic(date) {
+
+
+    const parts =
+        date.split("-");
+
+
+    if (
+        parts.length !== 3
+    ) {
+
+        return date;
+
+    }
+
+
+    return (
+
+        parts[2] +
+        "/" +
+        parts[1] +
+        "/" +
+        parts[0]
+
+    );
+
+}
+
+
+
+/* =====================================================
+   تشغيل الصفحة
+===================================================== */
+
+renderReports();
+
+
+/* تحميل تقرير تاريخ اليوم */
+
+loadReport(
+    document.getElementById(
+        "reportDate"
+    ).value
+);
+
+
+</script>
+
+
+</body>
+
+</html>
